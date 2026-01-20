@@ -1,0 +1,34 @@
+{
+  "tool": "USD Inspector & Packager",
+  "version": "0.1.0",
+  "generated_at": "2026-01-20T23:41:47.515630Z",
+  "source_usd": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\textured.usda",
+  "results": [
+    {
+      "level": "INFO",
+      "category": "Stage",
+      "message": "USD stage opened successfully.",
+      "prim": "/",
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\textured.usda"
+    },
+    {
+      "level": "INFO",
+      "category": "Layers",
+      "message": "Dependency found.",
+      "prim": "",
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/usd-inspector-packager/samples/textured.usda"
+    },
+    {
+      "level": "ERROR",
+      "category": "Textures",
+      "message": "Missing texture on disk. file @ /Root/Looks/Mat1/DiffuseTex",
+      "prim": "/Root/Looks/Mat1/DiffuseTex",
+      "path": "textures/albedo.png"
+    }
+  ],
+  "counts": {
+    "ERROR": 1,
+    "WARNING": 0,
+    "INFO": 2
+  }
+}

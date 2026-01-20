@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 
 from pxr import Usd, UsdShade, Sdf
 
+from usd_tool.models import ValidationResult
 from usd_tool.util.paths import resolve_asset_path, path_exists
 
 
@@ -23,10 +23,6 @@ def _is_udim_pattern(s: str) -> bool:
 
 
 def _udim_glob_candidates(resolved_path: str) -> list[Path]:
-    """
-    If resolved_path contains a UDIM token, replace it with * and glob.
-    Example: C:/tex/diffuse.<UDIM>.exr -> C:/tex/diffuse.*.exr
-    """
     p = Path(resolved_path)
     pattern = str(p)
 
@@ -34,7 +30,6 @@ def _udim_glob_candidates(resolved_path: str) -> list[Path]:
     pattern = pattern.replace("%(UDIM)d", "*").replace("%(udim)d", "*")
     pattern = pattern.replace("$UDIM", "*").replace("$udim", "*")
 
-    # Glob must happen in parent folder
     parent = Path(pattern).parent
     name = Path(pattern).name
     if not parent.exists():
@@ -43,13 +38,6 @@ def _udim_glob_candidates(resolved_path: str) -> list[Path]:
 
 
 def _extract_asset_strings(value) -> list[str]:
-    """
-    Handles:
-      - Sdf.AssetPath
-      - list/tuple of Sdf.AssetPath (asset arrays)
-      - plain string
-    Returns string asset paths (as authored).
-    """
     if value is None:
         return []
 
@@ -58,14 +46,14 @@ def _extract_asset_strings(value) -> list[str]:
         p = getattr(value, "path", "") or ""
         return [p] if p else []
 
-    # Asset arrays can come through as list of Sdf.AssetPath
+    # Asset arrays
     if isinstance(value, (list, tuple)):
-        out = []
+        out: list[str] = []
         for v in value:
             out.extend(_extract_asset_strings(v))
         return out
 
-    # Sometimes it’s already a string
+    # Sometimes already string
     if isinstance(value, str):
         return [value] if value else []
 
@@ -73,12 +61,6 @@ def _extract_asset_strings(value) -> list[str]:
 
 
 def find_texture_assets(stage: Usd.Stage) -> list[TextureHit]:
-    """
-    Traverses all UsdShade shaders and collects asset-valued inputs.
-    This catches the common patterns:
-      - UsdUVTexture inputs like "file"
-      - RenderMan/HdStorm variations ("filename", etc.)
-    """
     root_layer = stage.GetRootLayer()
     hits: list[TextureHit] = []
 
@@ -90,13 +72,11 @@ def find_texture_assets(stage: Usd.Stage) -> list[TextureHit]:
         shader_path = str(shader.GetPath())
 
         for inp in shader.GetInputs():
-            # Only consider asset/asset-array typed inputs
             attr = inp.GetAttr()
             type_name = attr.GetTypeName()
             is_assetish = (type_name == Sdf.ValueTypeNames.Asset) or (type_name == Sdf.ValueTypeNames.AssetArray)
 
             if not is_assetish:
-                # Many networks still store file paths as asset types; if not, skip for Day 4
                 continue
 
             val = attr.Get()
@@ -114,22 +94,14 @@ def find_texture_assets(stage: Usd.Stage) -> list[TextureHit]:
                     )
                 )
 
-    # De-dupe
+    # de-dupe
     uniq = {}
     for h in hits:
-        key = (h.shader_path, h.input_name, h.raw_value)
-        uniq[key] = h
-
+        uniq[(h.shader_path, h.input_name, h.raw_value)] = h
     return list(uniq.values())
 
 
-def texture_results(stage: Usd.Stage):
-    """
-    Returns:
-      (validation_results, texture_paths)
-    """
-    from usd_tool.core.inspector import ValidationResult  # local import to avoid circulars
-
+def texture_results(stage: Usd.Stage) -> tuple[list[ValidationResult], list[TextureHit]]:
     results: list[ValidationResult] = []
     hits = find_texture_assets(stage)
 
@@ -146,7 +118,6 @@ def texture_results(stage: Usd.Stage):
         return results, hits
 
     for h in hits:
-        # UDIM special case
         if _is_udim_pattern(h.raw_value):
             candidates = _udim_glob_candidates(h.resolved_path)
             if candidates:
