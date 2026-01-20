@@ -25,7 +25,7 @@ from usd_tool.core.loader import open_stage
 from usd_tool.core.inspector import scan_stage
 from usd_tool.core.reporting import write_report_json
 from usd_tool.models import ValidationResult, Level, LEVEL_ORDER
-
+from usd_tool.core.packager import package_usd
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -286,16 +286,45 @@ class MainWindow(QMainWindow):
         usd_path, out_dir = self._validate_inputs()
         if not usd_path:
             return
-        if not out_dir or not out_dir.exists():
-            QMessageBox.warning(self, "Missing Output Folder", "Please select a valid output folder.")
+        if not out_dir:
+            QMessageBox.warning(self, "Missing Output Folder", "Please select an output folder.")
             return
+
+        # Create a package folder inside the selected output dir
+        # Example: <output>/main_PACKAGE
+        pkg_root = out_dir / f"{usd_path.stem}_PACKAGE"
 
         portable = self.cb_relative_paths.isChecked()
         hashing = self.cb_hash_files.isChecked()
 
-        self._log(f"Package started... portable={portable} hashing={hashing}")
-        self._log("Packaging not implemented yet (Day 5 placeholder).")
-        self._log("Package finished (placeholder).")
+        if portable:
+            self._log("NOTE: Portable mode (path rewrite) is Day 8. Copy-only for now.")
+        if hashing:
+            self._log("NOTE: Hashing is Day 7. Copy-only for now.")
+
+        self._log(f"Package started -> {pkg_root}")
+
+        try:
+            copied, mapping = package_usd(str(usd_path), str(pkg_root))
+        except Exception as e:
+            QMessageBox.critical(self, "Package failed", str(e))
+            self._log(f"Package failed: {e!r}")
+            return
+
+        self._log(f"Package finished. Files copied: {len(copied)}")
+
+        # Optional: add a summary row to results table
+        self._last_results.append(
+            ValidationResult(
+                level="INFO",
+                category="Packager",
+                message=f"Packaged {len(copied)} files to {pkg_root}",
+                prim="",
+                path=str(pkg_root),
+            )
+        )
+        self._refresh_table_from_last()
+
 
     def _on_export(self):
         if not self._last_results or not self._last_source_usd:
