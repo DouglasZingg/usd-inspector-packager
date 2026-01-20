@@ -6,7 +6,7 @@ from typing import Iterable
 from pxr import Usd, Sdf
 
 from usd_tool.util.paths import resolve_asset_path, path_exists
-
+from usd_tool.core.textures import texture_results
 
 @dataclass(frozen=True)
 class Dependency:
@@ -124,7 +124,7 @@ def scan_stage(stage: Usd.Stage) -> tuple[list[ValidationResult], list[Dependenc
     deps.extend(_scan_layers(root_layer))
     deps.extend(_scan_prim_references_and_payloads(stage))
 
-    # De-dupe by (type, resolved, prim_path)
+    # De-dupe deps
     unique = {}
     for d in deps:
         key = (d.dep_type, d.resolved_path, d.prim_path)
@@ -133,7 +133,6 @@ def scan_stage(stage: Usd.Stage) -> tuple[list[ValidationResult], list[Dependenc
 
     results: list[ValidationResult] = []
 
-    # INFO summary
     results.append(
         ValidationResult(
             level="INFO",
@@ -151,7 +150,6 @@ def scan_stage(stage: Usd.Stage) -> tuple[list[ValidationResult], list[Dependenc
         display_path = d.asset_path
 
         if d.dep_type == "layer" and (d.resolved_path == "" or d.resolved_path == "anon:"):
-            # In-memory/anonymous layers can exist; treat as INFO
             results.append(
                 ValidationResult(
                     level="INFO",
@@ -184,4 +182,9 @@ def scan_stage(stage: Usd.Stage) -> tuple[list[ValidationResult], list[Dependenc
                 )
             )
 
+    #  Day 4: textures (UsdShade)
+    tex_results, _tex_hits = texture_results(stage)
+    results.extend(tex_results)
+
     return results, deps
+
