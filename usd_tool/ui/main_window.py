@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from usd_tool.core.loader import open_stage
+from usd_tool.core.inspector import scan_stage, ValidationResult
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
@@ -190,27 +192,27 @@ class MainWindow(QMainWindow):
         self._log("Scan started...")
         self._clear_results()
 
-        # Placeholder fake results for Day 2
-        self._add_result_row(
-            ValidationResult(
-                level="INFO",
-                category="Stage",
-                message="USD loaded (placeholder scan).",
-                prim="/",
-                path=str(usd_path),
+        try:
+            stage = open_stage(str(usd_path))
+            results, deps = scan_stage(stage)
+        except Exception as e:
+            self._add_result_row(
+                ValidationResult(
+                    level="ERROR",
+                    category="Stage",
+                    message=f"Failed to open/scan stage: {e}",
+                    prim="",
+                    path=str(usd_path),
+                )
             )
-        )
-        self._add_result_row(
-            ValidationResult(
-                level="WARNING",
-                category="Textures",
-                message="Missing texture detected (placeholder).",
-                prim="/Root/Looks/Mat1",
-                path="textures/albedo.png",
-            )
-        )
+            self._log(f"Scan failed: {e!r}")
+            return
 
-        self._log("Scan finished (Day 2 placeholder).")
+        for r in results:
+            self._add_result_row(r)
+
+        self._log(f"Scan finished. Dependencies found: {len(deps)}")
+
 
     def _on_package(self):
         usd_path, out_dir = self._validate_inputs()
