@@ -290,8 +290,6 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Missing Output Folder", "Please select an output folder.")
             return
 
-        # Create a package folder inside the selected output dir
-        # Example: <output>/main_PACKAGE
         pkg_root = out_dir / f"{usd_path.stem}_PACKAGE"
 
         portable = self.cb_relative_paths.isChecked()
@@ -299,31 +297,65 @@ class MainWindow(QMainWindow):
 
         if portable:
             self._log("NOTE: Portable mode (path rewrite) is Day 8. Copy-only for now.")
-        if hashing:
-            self._log("NOTE: Hashing is Day 7. Copy-only for now.")
 
         self._log(f"Package started -> {pkg_root}")
+        if hashing:
+            self._log("Hashing enabled (sha256). This may take longer on large packages.")
 
         try:
-            copied, mapping = package_usd(str(usd_path), str(pkg_root))
+            result = package_usd(
+                str(usd_path),
+                str(pkg_root),
+                compute_hashes=hashing,
+                version="0.1.0",
+            )
+
+            if result is None:
+                raise RuntimeError("package_usd returned None. Check usd_tool/core/packager.py is the Day 7 version.")
+
+            # Support both Day 6 and Day 7 returns (just in case)
+            if isinstance(result, tuple) and len(result) == 4:
+                copied, mapping, missing, manifest_path = result
+            elif isinstance(result, tuple) and len(result) == 2:
+                copied, mapping = result
+                missing = []
+                manifest_path = ""
+            else:
+                raise RuntimeError(f"Unexpected package_usd return value: {type(result)} {result!r}")
+
         except Exception as e:
             QMessageBox.critical(self, "Package failed", str(e))
             self._log(f"Package failed: {e!r}")
             return
 
-        self._log(f"Package finished. Files copied: {len(copied)}")
+        self._log(f"Package finished. Files copied: {len(copied)} | Missing: {len(missing)}")
+        self._log(f"Manifest: {manifest_path}")
 
-        # Optional: add a summary row to results table
+        # Add summary row
         self._last_results.append(
             ValidationResult(
                 level="INFO",
                 category="Packager",
-                message=f"Packaged {len(copied)} files to {pkg_root}",
+                message=f"Packaged {len(copied)} files (missing {len(missing)})",
                 prim="",
                 path=str(pkg_root),
             )
         )
+
+        # Add warnings for missing files
+        for m in missing:
+            self._last_results.append(
+                ValidationResult(
+                    level="WARNING",
+                    category=m.category,
+                    message="Missing during packaging (skipped).",
+                    prim="",
+                    path=m.src,
+                )
+            )
+
         self._refresh_table_from_last()
+
 
 
     def _on_export(self):
