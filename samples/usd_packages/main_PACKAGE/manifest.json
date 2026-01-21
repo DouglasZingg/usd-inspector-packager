@@ -1,23 +1,21 @@
 {
   "tool": "USD Inspector & Packager",
   "version": "0.1.0",
-  "generated_at": "2026-01-21T01:13:20.388456Z",
+  "generated_at": "2026-01-21T01:38:21.109674Z",
   "source_usd": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\main.usda",
   "package_root": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\main_PACKAGE",
   "copied_files": [
     {
       "src": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\main.usda",
-      "dst": "usd\\main_001.usda",
+      "dst": "usd\\main_003.usda",
       "type": "usd",
-      "size_bytes": 148,
-      "sha256": "6cbb1e559eee3be4dc5b784f1d1f2c14384bb5532d83178897350718510bc251"
+      "size_bytes": 148
     },
     {
       "src": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\asset.usda",
-      "dst": "usd\\asset_001.usda",
+      "dst": "usd\\asset_003.usda",
       "type": "usd",
-      "size_bytes": 87,
-      "sha256": "795e3170cd9e3de6b68565d1c7cd86b8e04f92fe6cc333c7d82fe2c5c343f58a"
+      "size_bytes": 87
     }
   ],
   "missing_files": [],

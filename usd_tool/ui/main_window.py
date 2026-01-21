@@ -26,6 +26,7 @@ from usd_tool.core.inspector import scan_stage
 from usd_tool.core.reporting import write_report_json
 from usd_tool.models import ValidationResult, Level, LEVEL_ORDER
 from usd_tool.core.packager import package_usd
+from usd_tool.core.batch import batch_scan, batch_package, write_batch_summary
 
 
 class MainWindow(QMainWindow):
@@ -80,6 +81,9 @@ class MainWindow(QMainWindow):
         options_row.addWidget(self.cb_hash_files)
         options_row.addStretch(1)
         layout.addLayout(options_row)
+
+        self.cb_batch_mode = QCheckBox("Batch mode (USD path is a folder)")
+        options_row.addWidget(self.cb_batch_mode)
 
         # ---------- Severity + view filters ----------
         filters_row = QHBoxLayout()
@@ -148,8 +152,20 @@ class MainWindow(QMainWindow):
         self.cb_show_info.stateChanged.connect(self._refresh_table_from_last)
         self.cb_only_issues.stateChanged.connect(self._refresh_table_from_last)
 
+        self.cb_batch_mode.stateChanged.connect(self._on_batch_mode_changed)
+
+
     # ---------- UI helpers ----------
     def _pick_usd_file(self):
+        batch_mode = hasattr(self, "cb_batch_mode") and self.cb_batch_mode.isChecked()
+
+        if batch_mode:
+            folder = QFileDialog.getExistingDirectory(self, "Select USD Folder", "")
+            if folder:
+                self.le_usd_path.setText(folder)
+                self._log(f"Selected USD folder: {folder}")
+            return
+
         path, _ = QFileDialog.getOpenFileName(
             self,
             "Select USD File",
@@ -159,6 +175,7 @@ class MainWindow(QMainWindow):
         if path:
             self.le_usd_path.setText(path)
             self._log(f"Selected USD: {path}")
+
 
     def _pick_output_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Output Folder", "")
@@ -205,11 +222,23 @@ class MainWindow(QMainWindow):
         usd_path = Path(usd_text) if usd_text else Path("")
         out_dir = Path(out_text) if out_text else None
 
+        batch_mode = hasattr(self, "cb_batch_mode") and self.cb_batch_mode.isChecked()
+
         if not usd_text or not usd_path.exists():
-            QMessageBox.warning(self, "Missing USD", "Please select a valid USD file.")
+            QMessageBox.warning(self, "Missing Path", "Please select a valid USD file (or folder in Batch mode).")
             return None, None
 
+        if batch_mode:
+            if not usd_path.is_dir():
+                QMessageBox.warning(self, "Batch Mode", "Batch mode is enabled-please select a folder.")
+                return None, None
+        else:
+            if not usd_path.is_file():
+                QMessageBox.warning(self, "Single Mode", "Batch mode is off-please select a USD file.")
+                return None, None
+
         return usd_path, out_dir
+
 
     # ---------- Sorting/filtering ----------
     def _sorted_results(self, results: list[ValidationResult]) -> list[ValidationResult]:
@@ -260,22 +289,41 @@ class MainWindow(QMainWindow):
         if not usd_path:
             return
 
-        self._log("Scan started...")
+        batch_mode = getattr(self, "cb_batch_mode", None) and self.cb_batch_mode.isChecked()
 
+        self._log("Scan started...")
         try:
-            stage = open_stage(str(usd_path))
-            results, deps = scan_stage(stage)
-            self._last_source_usd = str(usd_path)
-            self._last_results = results
+            if batch_mode:
+                # Treat USD field as folder
+                summary = batch_scan(str(usd_path))
+                self._last_source_usd = str(usd_path)
+                self._last_results = [
+                    ValidationResult(
+                        level="INFO",
+                        category="Batch",
+                        message=f"Scanned {summary['file_count']} files. Totals: "
+                                f"E={summary['totals']['ERROR']} "
+                                f"W={summary['totals']['WARNING']} "
+                                f"I={summary['totals']['INFO']}",
+                        prim="",
+                        path=str(usd_path),
+                    )
+                ]
+            else:
+                stage = open_stage(str(usd_path))
+                results, deps = scan_stage(stage)
+                self._last_source_usd = str(usd_path)
+                self._last_results = results
+
             self._refresh_table_from_last()
-            self._log(f"Scan finished. Dependencies found: {len(deps)}")
+            self._log("Scan finished.")
         except Exception as e:
             self._last_source_usd = str(usd_path)
             self._last_results = [
                 ValidationResult(
                     level="ERROR",
-                    category="Stage",
-                    message=f"Failed to open/scan stage: {e}",
+                    category="Stage" if not batch_mode else "Batch",
+                    message=f"Scan failed: {e}",
                     prim="",
                     path=str(usd_path),
                 )
@@ -293,124 +341,119 @@ class MainWindow(QMainWindow):
 
         portable = self.cb_relative_paths.isChecked()
         hashing = self.cb_hash_files.isChecked()
+        batch_mode = getattr(self, "cb_batch_mode", None) and self.cb_batch_mode.isChecked()
 
-        # Create a package folder inside the selected output dir
-        pkg_root = out_dir / f"{usd_path.stem}_PACKAGE"
-
-        self._log(f"Package started -> {pkg_root}")
-        if hashing:
-            self._log("Hashing enabled (sha256). This may take longer on large packages.")
+        self._log("Package started...")
+        if batch_mode:
+            self._log(f"Batch packaging folder -> {usd_path}")
+        else:
+            self._log(f"Single packaging USD -> {usd_path}")
+        self._log(f"Output folder -> {out_dir}")
         if portable:
-            self._log("Portable mode enabled: will rewrite paths to packaged-relative (Day 8).")
+            self._log("Portable mode enabled (rewrite paths).")
+        if hashing:
+            self._log("Hashing enabled (sha256).")
 
-        # --- Run packager (supports Day 7 or Day 8 return shapes) ---
         try:
-            result = package_usd(
-                str(usd_path),
-                str(pkg_root),
-                compute_hashes=hashing,
-                portable=portable,      # safe if your packager supports it; if not, see except below
-                version="0.1.0",
-            )
-        except TypeError as e:
-            # If your packager is still Day 7 signature (no portable kw), retry without it.
-            if "portable" in str(e):
-                self._log("Packager doesn't support 'portable' kwarg yet; retrying copy-only (no rewrite).")
-                try:
-                    result = package_usd(
-                        str(usd_path),
-                        str(pkg_root),
-                        compute_hashes=hashing,
-                        version="0.1.0",
+            if batch_mode:
+                # Output root for batch
+                batch_out = out_dir / f"{usd_path.stem}_BATCH_PACKAGE"
+                batch_out.mkdir(parents=True, exist_ok=True)
+
+                summary = batch_package(
+                    folder=str(usd_path),
+                    output_root=str(batch_out),
+                    compute_hashes=hashing,
+                    portable=portable,
+                    version="0.1.0",
+                )
+
+                summary_path = write_batch_summary(str(batch_out / "batch_summary.json"), summary)
+
+                self._last_results.append(
+                    ValidationResult(
+                        level="INFO",
+                        category="Batch",
+                        message=f"Batch packaged {summary['file_count']} files "
+                                f"(failed {summary['totals']['files_failed']}). "
+                                f"Copied {summary['totals']['copied_total']}, missing {summary['totals']['missing_total']}.",
+                        prim="",
+                        path=str(batch_out),
                     )
-                    portable = False
-                except Exception as e2:
-                    QMessageBox.critical(self, "Package failed", str(e2))
-                    self._log(f"Package failed: {e2!r}")
-                    return
+                )
+                self._last_results.append(
+                    ValidationResult(
+                        level="INFO",
+                        category="Batch",
+                        message="Wrote batch_summary.json",
+                        prim="",
+                        path=str(summary_path),
+                    )
+                )
+                self._refresh_table_from_last()
+                self._log(f"Batch finished. Summary: {summary_path}")
+
             else:
-                QMessageBox.critical(self, "Package failed", str(e))
-                self._log(f"Package failed: {e!r}")
-                return
+                # Single package output root
+                pkg_root = out_dir / f"{usd_path.stem}_PACKAGE"
+
+                result = package_usd(
+                    str(usd_path),
+                    str(pkg_root),
+                    compute_hashes=hashing,
+                    portable=portable,
+                    version="0.1.0",
+                )
+
+                # Unpack safely
+                copied = []
+                missing = []
+                manifest_path = ""
+                rewrite_stats = None
+
+                if isinstance(result, tuple) and len(result) == 5:
+                    copied, _mapping, missing, manifest_path, rewrite_stats = result
+                elif isinstance(result, tuple) and len(result) == 4:
+                    copied, _mapping, missing, manifest_path = result
+                else:
+                    raise RuntimeError(f"Unexpected package_usd return: {type(result)} {result!r}")
+
+                self._log(f"Package finished. Files copied: {len(copied)} | Missing: {len(missing)}")
+                if manifest_path:
+                    self._log(f"Manifest: {manifest_path}")
+                if rewrite_stats is not None:
+                    self._log(f"Portable rewrite: {rewrite_stats}")
+
+                self._last_results.append(
+                    ValidationResult(
+                        level="INFO",
+                        category="Packager",
+                        message=f"Packaged {len(copied)} files (missing {len(missing)})",
+                        prim="",
+                        path=str(pkg_root),
+                    )
+                )
+
+                for m in missing:
+                    cat = getattr(m, "category", "Missing")
+                    src = getattr(m, "src", "")
+                    self._last_results.append(
+                        ValidationResult(
+                            level="WARNING",
+                            category=cat,
+                            message="Missing during packaging (skipped).",
+                            prim="",
+                            path=str(src),
+                        )
+                    )
+
+                self._refresh_table_from_last()
+
         except Exception as e:
             QMessageBox.critical(self, "Package failed", str(e))
             self._log(f"Package failed: {e!r}")
             return
 
-        if result is None:
-            QMessageBox.critical(self, "Package failed", "package_usd returned None. Check usd_tool/core/packager.py.")
-            self._log("Package failed: package_usd returned None.")
-            return
-
-        # --- Unpack return value safely ---
-        copied = []
-        mapping = {}
-        missing = []
-        manifest_path = ""
-        rewrite_stats = None
-
-        if isinstance(result, tuple) and len(result) == 5:
-            copied, mapping, missing, manifest_path, rewrite_stats = result
-        elif isinstance(result, tuple) and len(result) == 4:
-            copied, mapping, missing, manifest_path = result
-        elif isinstance(result, tuple) and len(result) == 2:
-            copied, mapping = result
-        else:
-            QMessageBox.critical(self, "Package failed", f"Unexpected package_usd return: {type(result)} {result!r}")
-            self._log(f"Package failed: Unexpected package_usd return: {type(result)} {result!r}")
-            return
-
-        # --- Log summary ---
-        self._log(f"Package finished. Files copied: {len(copied)} | Missing: {len(missing)}")
-        if manifest_path:
-            self._log(f"Manifest: {manifest_path}")
-
-        if rewrite_stats is not None:
-            self._log(f"Portable rewrite: {rewrite_stats}")
-
-        # --- Add results rows for UI ---
-        self._last_results.append(
-            ValidationResult(
-                level="INFO",
-                category="Packager",
-                message=f"Packaged {len(copied)} files (missing {len(missing)})"
-                        + (" + portable rewrite" if portable and rewrite_stats is not None else ""),
-                prim="",
-                path=str(pkg_root),
-            )
-        )
-
-        if rewrite_stats is not None:
-            self._last_results.append(
-                ValidationResult(
-                    level="INFO",
-                    category="Portable",
-                    message=(
-                        f"Rewrote paths: sublayers={rewrite_stats.get('sublayers', 0)}, "
-                        f"refs={rewrite_stats.get('references', 0)}, "
-                        f"payloads={rewrite_stats.get('payloads', 0)}, "
-                        f"textures={rewrite_stats.get('textures', 0)}"
-                    ),
-                    prim="",
-                    path=str(pkg_root),
-                )
-            )
-
-        for m in missing:
-            # missing items are MissingFile dataclasses; use attributes defensively
-            cat = getattr(m, "category", "Missing")
-            src = getattr(m, "src", "")
-            self._last_results.append(
-                ValidationResult(
-                    level="WARNING",
-                    category=cat,
-                    message="Missing during packaging (skipped).",
-                    prim="",
-                    path=str(src),
-                )
-            )
-
-        self._refresh_table_from_last()
 
     def _on_export(self):
         if not self._last_results or not self._last_source_usd:
@@ -437,3 +480,15 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Export failed", str(e))
             self._log(f"Export failed: {e!r}")
+
+    def _on_batch_mode_changed(self):
+        p = Path(self.le_usd_path.text().strip()) if self.le_usd_path.text().strip() else None
+        if not p:
+            return
+
+        if self.cb_batch_mode.isChecked() and p.exists() and p.is_file():
+            self.le_usd_path.clear()
+            self._log("Batch mode enabled: cleared USD file path (select a folder).")
+        elif (not self.cb_batch_mode.isChecked()) and p.exists() and p.is_dir():
+            self.le_usd_path.clear()
+            self._log("Batch mode disabled: cleared USD folder path (select a file).")

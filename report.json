@@ -1,55 +1,34 @@
 {
   "tool": "USD Inspector & Packager",
   "version": "0.1.0",
-  "generated_at": "2026-01-21T01:13:27.455348Z",
-  "source_usd": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\main.usda",
+  "generated_at": "2026-01-21T01:38:43.733277Z",
+  "source_usd": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples",
   "results": [
     {
       "level": "INFO",
-      "category": "Stage",
-      "message": "USD stage opened successfully.",
-      "prim": "/",
-      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\main.usda"
-    },
-    {
-      "level": "INFO",
-      "category": "Layers",
-      "message": "Dependency found.",
+      "category": "Batch",
+      "message": "Scanned 12 files. Totals: E=0 W=0 I=41",
       "prim": "",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/usd-inspector-packager/samples/main.usda"
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples"
     },
     {
       "level": "INFO",
-      "category": "References",
-      "message": "Dependency found.",
-      "prim": "/Root/ReferencedAsset",
-      "path": "asset.usda"
-    },
-    {
-      "level": "INFO",
-      "category": "Textures",
-      "message": "No asset-typed texture inputs found (UsdShade).",
+      "category": "Batch",
+      "message": "Batch packaged 12 files (failed 0). Copied 18, missing 0.",
       "prim": "",
-      "path": ""
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\samples_BATCH_PACKAGE"
     },
     {
       "level": "INFO",
-      "category": "Packager",
-      "message": "Packaged 2 files (missing 0) + portable rewrite",
+      "category": "Batch",
+      "message": "Wrote batch_summary.json",
       "prim": "",
-      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\main_PACKAGE"
-    },
-    {
-      "level": "INFO",
-      "category": "Portable",
-      "message": "Rewrote paths: sublayers=0, refs=0, payloads=0, textures=0",
-      "prim": "",
-      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\main_PACKAGE"
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\samples_BATCH_PACKAGE\\batch_summary.json"
     }
   ],
   "counts": {
     "ERROR": 0,
     "WARNING": 0,
-    "INFO": 6
+    "INFO": 3
   }
 }
