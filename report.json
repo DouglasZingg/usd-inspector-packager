@@ -1,34 +1,55 @@
 {
   "tool": "USD Inspector & Packager",
   "version": "0.1.0",
-  "generated_at": "2026-01-20T23:41:47.515630Z",
-  "source_usd": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\textured.usda",
+  "generated_at": "2026-01-21T01:13:27.455348Z",
+  "source_usd": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\main.usda",
   "results": [
     {
       "level": "INFO",
       "category": "Stage",
       "message": "USD stage opened successfully.",
       "prim": "/",
-      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\textured.usda"
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\main.usda"
     },
     {
       "level": "INFO",
       "category": "Layers",
       "message": "Dependency found.",
       "prim": "",
-      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/usd-inspector-packager/samples/textured.usda"
+      "path": "C:/Users/dougl/OneDrive/Desktop/Projects/usd-inspector-packager/samples/main.usda"
     },
     {
-      "level": "ERROR",
+      "level": "INFO",
+      "category": "References",
+      "message": "Dependency found.",
+      "prim": "/Root/ReferencedAsset",
+      "path": "asset.usda"
+    },
+    {
+      "level": "INFO",
       "category": "Textures",
-      "message": "Missing texture on disk. file @ /Root/Looks/Mat1/DiffuseTex",
-      "prim": "/Root/Looks/Mat1/DiffuseTex",
-      "path": "textures/albedo.png"
+      "message": "No asset-typed texture inputs found (UsdShade).",
+      "prim": "",
+      "path": ""
+    },
+    {
+      "level": "INFO",
+      "category": "Packager",
+      "message": "Packaged 2 files (missing 0) + portable rewrite",
+      "prim": "",
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\main_PACKAGE"
+    },
+    {
+      "level": "INFO",
+      "category": "Portable",
+      "message": "Rewrote paths: sublayers=0, refs=0, payloads=0, textures=0",
+      "prim": "",
+      "path": "C:\\Users\\dougl\\OneDrive\\Desktop\\Projects\\usd-inspector-packager\\samples\\usd_packages\\main_PACKAGE"
     }
   ],
   "counts": {
-    "ERROR": 1,
+    "ERROR": 0,
     "WARNING": 0,
-    "INFO": 2
+    "INFO": 6
   }
 }

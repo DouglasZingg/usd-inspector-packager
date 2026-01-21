@@ -27,6 +27,7 @@ from usd_tool.core.reporting import write_report_json
 from usd_tool.models import ValidationResult, Level, LEVEL_ORDER
 from usd_tool.core.packager import package_usd
 
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -290,73 +291,126 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Missing Output Folder", "Please select an output folder.")
             return
 
-        pkg_root = out_dir / f"{usd_path.stem}_PACKAGE"
-
         portable = self.cb_relative_paths.isChecked()
         hashing = self.cb_hash_files.isChecked()
 
-        if portable:
-            self._log("NOTE: Portable mode (path rewrite) is Day 8. Copy-only for now.")
+        # Create a package folder inside the selected output dir
+        pkg_root = out_dir / f"{usd_path.stem}_PACKAGE"
 
         self._log(f"Package started -> {pkg_root}")
         if hashing:
             self._log("Hashing enabled (sha256). This may take longer on large packages.")
+        if portable:
+            self._log("Portable mode enabled: will rewrite paths to packaged-relative (Day 8).")
 
+        # --- Run packager (supports Day 7 or Day 8 return shapes) ---
         try:
             result = package_usd(
                 str(usd_path),
                 str(pkg_root),
                 compute_hashes=hashing,
+                portable=portable,      # safe if your packager supports it; if not, see except below
                 version="0.1.0",
             )
-
-            if result is None:
-                raise RuntimeError("package_usd returned None. Check usd_tool/core/packager.py is the Day 7 version.")
-
-            # Support both Day 6 and Day 7 returns (just in case)
-            if isinstance(result, tuple) and len(result) == 4:
-                copied, mapping, missing, manifest_path = result
-            elif isinstance(result, tuple) and len(result) == 2:
-                copied, mapping = result
-                missing = []
-                manifest_path = ""
+        except TypeError as e:
+            # If your packager is still Day 7 signature (no portable kw), retry without it.
+            if "portable" in str(e):
+                self._log("Packager doesn't support 'portable' kwarg yet; retrying copy-only (no rewrite).")
+                try:
+                    result = package_usd(
+                        str(usd_path),
+                        str(pkg_root),
+                        compute_hashes=hashing,
+                        version="0.1.0",
+                    )
+                    portable = False
+                except Exception as e2:
+                    QMessageBox.critical(self, "Package failed", str(e2))
+                    self._log(f"Package failed: {e2!r}")
+                    return
             else:
-                raise RuntimeError(f"Unexpected package_usd return value: {type(result)} {result!r}")
-
+                QMessageBox.critical(self, "Package failed", str(e))
+                self._log(f"Package failed: {e!r}")
+                return
         except Exception as e:
             QMessageBox.critical(self, "Package failed", str(e))
             self._log(f"Package failed: {e!r}")
             return
 
-        self._log(f"Package finished. Files copied: {len(copied)} | Missing: {len(missing)}")
-        self._log(f"Manifest: {manifest_path}")
+        if result is None:
+            QMessageBox.critical(self, "Package failed", "package_usd returned None. Check usd_tool/core/packager.py.")
+            self._log("Package failed: package_usd returned None.")
+            return
 
-        # Add summary row
+        # --- Unpack return value safely ---
+        copied = []
+        mapping = {}
+        missing = []
+        manifest_path = ""
+        rewrite_stats = None
+
+        if isinstance(result, tuple) and len(result) == 5:
+            copied, mapping, missing, manifest_path, rewrite_stats = result
+        elif isinstance(result, tuple) and len(result) == 4:
+            copied, mapping, missing, manifest_path = result
+        elif isinstance(result, tuple) and len(result) == 2:
+            copied, mapping = result
+        else:
+            QMessageBox.critical(self, "Package failed", f"Unexpected package_usd return: {type(result)} {result!r}")
+            self._log(f"Package failed: Unexpected package_usd return: {type(result)} {result!r}")
+            return
+
+        # --- Log summary ---
+        self._log(f"Package finished. Files copied: {len(copied)} | Missing: {len(missing)}")
+        if manifest_path:
+            self._log(f"Manifest: {manifest_path}")
+
+        if rewrite_stats is not None:
+            self._log(f"Portable rewrite: {rewrite_stats}")
+
+        # --- Add results rows for UI ---
         self._last_results.append(
             ValidationResult(
                 level="INFO",
                 category="Packager",
-                message=f"Packaged {len(copied)} files (missing {len(missing)})",
+                message=f"Packaged {len(copied)} files (missing {len(missing)})"
+                        + (" + portable rewrite" if portable and rewrite_stats is not None else ""),
                 prim="",
                 path=str(pkg_root),
             )
         )
 
-        # Add warnings for missing files
+        if rewrite_stats is not None:
+            self._last_results.append(
+                ValidationResult(
+                    level="INFO",
+                    category="Portable",
+                    message=(
+                        f"Rewrote paths: sublayers={rewrite_stats.get('sublayers', 0)}, "
+                        f"refs={rewrite_stats.get('references', 0)}, "
+                        f"payloads={rewrite_stats.get('payloads', 0)}, "
+                        f"textures={rewrite_stats.get('textures', 0)}"
+                    ),
+                    prim="",
+                    path=str(pkg_root),
+                )
+            )
+
         for m in missing:
+            # missing items are MissingFile dataclasses; use attributes defensively
+            cat = getattr(m, "category", "Missing")
+            src = getattr(m, "src", "")
             self._last_results.append(
                 ValidationResult(
                     level="WARNING",
-                    category=m.category,
+                    category=cat,
                     message="Missing during packaging (skipped).",
                     prim="",
-                    path=m.src,
+                    path=str(src),
                 )
             )
 
         self._refresh_table_from_last()
-
-
 
     def _on_export(self):
         if not self._last_results or not self._last_source_usd:

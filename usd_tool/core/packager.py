@@ -11,7 +11,7 @@ from usd_tool.core.loader import open_stage
 from usd_tool.core.inspector import scan_stage
 from usd_tool.core.textures import find_texture_assets
 from usd_tool.util.hashing import sha256_file
-
+from usd_tool.util.rewrite import rewrite_paths_in_packaged_usd
 
 @dataclass(frozen=True)
 class CopiedFile:
@@ -118,9 +118,11 @@ def package_usd(
     output_root: str,
     *,
     compute_hashes: bool = False,
+    portable: bool = False,
     tool_name: str = "USD Inspector & Packager",
     version: str = "0.1.0",
-) -> tuple[list[CopiedFile], dict[str, str], list[MissingFile], str]:
+) -> tuple[list[CopiedFile], dict[str, str], list[MissingFile], str, dict[str, int] | None]:
+
     """
     Returns:
       copied_files, mapping(src_abs->dst_rel), missing_files, manifest_path
@@ -213,5 +215,22 @@ def package_usd(
         version=version,
     )
 
+    rewrite_stats = None
+    if portable:
+        # We copied the root USD into /usd/ with possibly a different name (collision-safe).
+        # Find its packaged location using mapping.
+        packaged_rel = mapping.get(str(src_path))
+        if not packaged_rel:
+            raise RuntimeError("Portable rewrite failed: root USD not present in mapping.")
+        packaged_usd_abs = out_root / packaged_rel
+
+        rewrite_stats = rewrite_paths_in_packaged_usd(
+            packaged_usd_path=str(packaged_usd_abs),
+            package_root=str(out_root),
+            mapping=mapping,
+        )
+
+
     #Critical: ALWAYS return the 4-tuple
-    return copied, mapping, missing, str(manifest_path)
+    return copied, mapping, missing, str(manifest_path), rewrite_stats
+
