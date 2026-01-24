@@ -26,8 +26,7 @@ from usd_tool.core.inspector import scan_stage
 from usd_tool.core.reporting import write_report_json
 from usd_tool.models import ValidationResult, Level, LEVEL_ORDER
 from usd_tool.core.packager import package_usd
-from usd_tool.core.batch import batch_scan, batch_package, write_batch_summary
-
+from usd_tool.core.batch import batch_scan_full
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -262,6 +261,11 @@ class MainWindow(QMainWindow):
 
         out: list[ValidationResult] = []
         for r in results:
+            # Keep batch headers visible even when hiding INFO
+            if r.category == "Batch":
+                out.append(r)
+                continue
+
             if only_issues and r.level == "INFO":
                 continue
             if r.level == "ERROR" and not show_error:
@@ -272,6 +276,7 @@ class MainWindow(QMainWindow):
                 continue
             out.append(r)
         return out
+
 
     def _refresh_table_from_last(self):
         self._clear_results()
@@ -289,34 +294,31 @@ class MainWindow(QMainWindow):
         if not usd_path:
             return
 
-        batch_mode = getattr(self, "cb_batch_mode", None) and self.cb_batch_mode.isChecked()
+        batch_mode = hasattr(self, "cb_batch_mode") and self.cb_batch_mode.isChecked()
 
         self._log("Scan started...")
+        self._clear_results()
+
         try:
             if batch_mode:
-                # Treat USD field as folder
-                summary = batch_scan(str(usd_path))
-                self._last_source_usd = str(usd_path)
-                self._last_results = [
-                    ValidationResult(
-                        level="INFO",
-                        category="Batch",
-                        message=f"Scanned {summary['file_count']} files. Totals: "
-                                f"E={summary['totals']['ERROR']} "
-                                f"W={summary['totals']['WARNING']} "
-                                f"I={summary['totals']['INFO']}",
-                        prim="",
-                        path=str(usd_path),
-                    )
-                ]
-            else:
-                stage = open_stage(str(usd_path))
-                results, deps = scan_stage(stage)
+                self._log(f"Batch scan folder: {usd_path}")
+                results = batch_scan_full(str(usd_path))
+
                 self._last_source_usd = str(usd_path)
                 self._last_results = results
 
-            self._refresh_table_from_last()
-            self._log("Scan finished.")
+                self._refresh_table_from_last()
+                self._log(f"Batch scan finished. Total rows: {len(results)}")
+            else:
+                stage = open_stage(str(usd_path))
+                results, deps = scan_stage(stage)
+
+                self._last_source_usd = str(usd_path)
+                self._last_results = results
+
+                self._refresh_table_from_last()
+                self._log(f"Scan finished. Dependencies found: {len(deps)}")
+
         except Exception as e:
             self._last_source_usd = str(usd_path)
             self._last_results = [
@@ -330,6 +332,7 @@ class MainWindow(QMainWindow):
             ]
             self._refresh_table_from_last()
             self._log(f"Scan failed: {e!r}")
+
 
     def _on_package(self):
         usd_path, out_dir = self._validate_inputs()

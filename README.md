@@ -1,57 +1,158 @@
 # USD Inspector & Packager (Standalone Pipeline Utility)
 
-Standalone Python tool for inspecting USD assets and packaging all dependencies into a portable drop.
+Standalone Python desktop app for inspecting USD assets and packaging dependencies into a portable drop.
 
-**Target use cases**
-- Move assets between machines / shares
-- Department handoff (surfacing → lighting → FX)
-- Farm submissions / render prep
-- Quick validation of missing references, payloads, sublayers, and textures
+**Built for pipeline / tools / technical artist portfolios** (VFX + real-time).  
+**Core skills demonstrated:** OpenUSD (pxr), dependency scanning, validation reporting, portable packaging, and batch processing.
 
-## Features (v1.0.0)
+## What it does (v1.0.0)
 
 ### Inspector (Scan)
-- Opens `.usd/.usda/.usdc/.usdz`
-- Detects:
-  - Missing **sublayers**
-  - Missing **references**
-  - Missing **payloads**
-  - Missing **texture assets** (UsdShade asset-typed inputs)
-- Produces a structured report with severities:
-  - `INFO`, `WARNING`, `ERROR`
+- Opens: `.usd`, `.usda`, `.usdc`, `.usdz`
+- Finds and validates:
+  - **Sublayers** (missing layer files)
+  - **References** (missing referenced USDs)
+  - **Payloads** (missing payload USDs)
+  - **Textures** (UsdShade **asset-typed** shader inputs)
+- Results are structured and severity-ranked:
+  - `ERROR`, `WARNING`, `INFO`
+- Export: `report.json`
 
 ### Packager
-Creates:
+Creates a clean package:
+```
 <OUTPUT>/<asset>_PACKAGE/
-usd/
-textures/
-deps/
-manifest.json
-
-
+  usd/
+  textures/
+  deps/
+  manifest.json
+```
 - Copies root USD + discovered dependencies
-- Collision-safe renames for duplicate filenames
-- Writes `manifest.json` (with optional SHA-256 hashes)
-- Portable mode (optional):
-  - Rewrites paths inside the packaged root USD to use **packaged-relative** paths
+- Collision-safe renames (no overwrites)
+- Writes `manifest.json` (optional SHA-256 hashing)
+- **Portable mode** (optional): rewrites paths inside the packaged USD to packaged-relative paths
 
-### Batch Mode
-- Scan or package a folder of USDs
-- Outputs `batch_summary.json`
+### Batch mode
+- Scan/package a whole folder of USDs
+- Writes `batch_summary.json` in the batch output folder
 
----
+## Quick start (Windows / Command Prompt)
 
-## Install
+> Recommended Python: **3.10 or 3.11**  
+> (Many OpenUSD builds are not available for Python 3.14 yet.)
 
-### Requirements
-- Python 3.10 / 3.11 recommended
-- OpenUSD Python bindings (`pxr`)
-- PySide6
+### Option A — Command Prompt (setup.bat)
+1) Open Command Prompt in the repo folder
+2) Run:
+```bat
+setup.bat
+```
+3) Run the app (either):
+```bat
+run_app.bat
+```
+or:
+```bat
+.venv\Scripts\activate
+python main.py
+```
 
-### Create venv
-**Windows (PowerShell)**
+### Option B — PowerShell (setup.ps1)
+1) Open PowerShell in the repo folder
+2) If scripts are blocked (one-time, current window only):
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
+Set-ExecutionPolicy -Scope Process Bypass
+```
+3) Run:
+```powershell
+.\setup.ps1
+```
+4) Launch:
+```bat
+run_app.bat
+```
+
+## Using the app
+
+### Single-file scan
+1) Click **Browse USD...** and select a USD file (try `samples/main.usda` after running python tools\make_demos.py)
+2) Click **Scan**
+3) Use filters (Errors/Warnings/Info) to review results
+4) Click **Export Report** to save a `report.json`
+
+### Single-file package
+1) Select a USD file and an output folder
+2) Optional toggles:
+   - **Hash files** (writes sha256 per copied file in the manifest)
+   - **Portable mode** (rewrites paths inside packaged USD)
+3) Click **Package**
+4) Check output for `<asset>_PACKAGE/manifest.json`
+
+### Batch mode (folder scan/package)
+1) Enable **Batch mode**
+2) Click **Browse USD...** and select a folder (try the `samples/` folder)
+3) Click **Package**
+4) Check output for:
+   - `*_BATCH_PACKAGE/`
+   - `batch_summary.json`
+
+## Demo samples
+
+This repo includes a single script that generates a complete demo set:
+
+```bat
+python tools\make_demos.py
+```
+
+It creates:
+- `samples/sample.usda`
+- `samples/asset.usda`
+- `samples/main.usda` (references `asset.usda`)
+- `samples/textured.usda` (uses `samples/textures/albedo.png`)
+
+To test missing texture detection:
+- delete `samples/textures/albedo.png` and re-scan `samples/textured.usda`.
+
+## pxr / OpenUSD install notes (important)
+
+`pxr` is not a pure-python library. On Windows it typically comes from:
+- A prebuilt OpenUSD distribution (adds `pxr` + required DLLs), or
+- A compatible wheel/package that matches your Python version.
+
+If `from pxr import Usd` fails:
+- Confirm you are running **the venv Python** (`where python`)
+- Prefer Python **3.10/3.11**
+- Ensure OpenUSD DLLs are discoverable on PATH (Windows)
+
+This project purposely keeps `requirements.txt` minimal because pxr installation varies by platform.
+
+## Outputs
+
+- **manifest.json** (written during Package)
+  - lists copied files with `src -> dst` mapping, types, sizes, optional `sha256`
+  - includes missing/skipped dependencies
+- **report.json** (Export Report)
+  - scan results, counts, metadata
+- **batch_summary.json** (Batch mode Package)
+  - per-file status + totals
+
+## Repo layout
+
+```
+usd-inspector-packager/
+  main.py
+  setup.bat
+  requirements.txt
+  tools/
+    make_demos.py
+  usd_tool/
+    app.py
+    models.py
+    core/
+    ui/
+    util/
+  samples/   (generated by tools/make_demos.py)
+```
+
+## License
+MIT (see LICENSE)
